@@ -1,3 +1,10 @@
+# Edits
+1. Added AES encryption on JS code, for hide them from IPS.
+2. Changed from a reverse shell with Netcat to Powershell Rev. Shell
+3. Obfuscated part of Word's XML files.
+
+
+
 # MS-MSDT "Follina" Attack Vector
 
 > John Hammond | May 30, 2022
