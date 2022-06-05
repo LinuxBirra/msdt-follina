@@ -1,3 +1,6 @@
+# Requeriments
+Install pycrypto module before running
+
 # Edits
 1. Added AES encryption on JS code, for hide them from IPS.
 2. Changed from a reverse shell with Netcat to Powershell Rev. Shell
